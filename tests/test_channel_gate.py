@@ -10,9 +10,13 @@ BASE = {
     "sku": "SYNTH-001",
     "source_identity_current": True,
     "marketplace_permission": "EBAY-ELIGIBLE",
+    "supplier_trade_cost_known": True,
     "freight_landed_cost_known": True,
+    "marketplace_plan_fee_known": True,
+    "category_fee_known": True,
     "fulfilment_seller_identity_known": True,
     "inventory_control_evidence": True,
+    "inventory_evidence_fresh": True,
     "price_aud": 49.95,
     "channel_contribution_aud": 8.25,
 }
@@ -41,8 +45,17 @@ class ChannelGateTests(unittest.TestCase):
     def test_unknown_permission_denied(self):
         self.assertEqual(self.result_for(marketplace_permission="UNKNOWN").reason, "MARKETPLACE_PERMISSION_NOT_ELIGIBLE")
 
+    def test_unknown_trade_cost_denied(self):
+        self.assertEqual(self.result_for(supplier_trade_cost_known=False).reason, "TRADE_COST_UNKNOWN")
+
     def test_unknown_freight_denied(self):
         self.assertEqual(self.result_for(freight_landed_cost_known=False).reason, "FREIGHT_UNKNOWN")
+
+    def test_unknown_plan_fee_denied(self):
+        self.assertEqual(self.result_for(marketplace_plan_fee_known=False).reason, "CHANNEL_FEE_EVIDENCE_UNKNOWN")
+
+    def test_unknown_category_fee_denied(self):
+        self.assertEqual(self.result_for(category_fee_known=False).reason, "CHANNEL_FEE_EVIDENCE_UNKNOWN")
 
     def test_unknown_fulfilment_identity_denied(self):
         self.assertEqual(self.result_for(fulfilment_seller_identity_known=False).reason, "FULFILMENT_IDENTITY_UNKNOWN")
@@ -52,6 +65,9 @@ class ChannelGateTests(unittest.TestCase):
 
     def test_inventory_control_unknown_denied(self):
         self.assertEqual(self.result_for(inventory_control_evidence=False).reason, "INVENTORY_CONTROL_UNKNOWN")
+
+    def test_stale_inventory_evidence_denied(self):
+        self.assertEqual(self.result_for(inventory_evidence_fresh=False).reason, "STALE_INVENTORY_EVIDENCE")
 
     def test_stale_source_identity_denied(self):
         self.assertEqual(self.result_for(source_identity_current=False).reason, "STALE_SOURCE_IDENTITY")
