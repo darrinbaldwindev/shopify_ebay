@@ -16,6 +16,19 @@ class SyncContractTests(unittest.TestCase):
         self.assertFalse(result["receipt"]["publication_authority"])
         self.assertFalse(result["receipt"]["network_io"])
 
+    def test_stale_inventory_event_fails_closed(self):
+        event = {
+            "event_id": "inv-stale",
+            "shopify_variant_id": "gid://shopify/ProductVariant/100",
+            "sku": "SKU-100",
+            "inventory_quantity": 5,
+            "inventory_revision": 41,
+        }
+        result = inventory_change(event, latest_revision=41)
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["reason"], "STALE_INVENTORY_EVENT")
+        self.assertFalse(result["receipt"]["publication_authority"])
+
     def test_order_handoff_preserves_shopify_order_authority(self):
         result = order_handoff({
             "event_id": "ord-1",
@@ -27,6 +40,18 @@ class SyncContractTests(unittest.TestCase):
         self.assertEqual(result["shopify_order_candidate"]["canonical_order_authority"], "SHOPIFY")
         self.assertFalse(result["receipt"]["publication_authority"])
 
+    def test_duplicate_order_import_fails_closed(self):
+        event = {
+            "event_id": "ord-replay",
+            "ebay_order_id": "EBAY-ORDER-REPLAY",
+            "sku": "SKU-100",
+            "quantity": 1,
+        }
+        result = order_handoff(event, frozenset({"EBAY-ORDER-REPLAY"}))
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["reason"], "DUPLICATE_ORDER_IMPORT")
+        self.assertFalse(result["receipt"]["network_io"])
+
     def test_tracking_requires_exact_order_correlation(self):
         result = tracking_update({
             "event_id": "track-1",
@@ -37,6 +62,30 @@ class SyncContractTests(unittest.TestCase):
         self.assertFalse(result["accepted"])
         self.assertEqual(result["reason"], "MISSING_TRACKING_CORRELATION")
         self.assertFalse(result["receipt"]["network_io"])
+
+    def test_tracking_correlation_mismatch_fails_closed(self):
+        event = {
+            "event_id": "track-mismatch",
+            "shopify_order_id": "SHOPIFY-ORDER-2",
+            "ebay_order_id": "EBAY-ORDER-1",
+            "tracking_number": "TRACK-1",
+        }
+        result = tracking_update(event, expected_correlation=("SHOPIFY-ORDER-1", "EBAY-ORDER-1"))
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["reason"], "TRACKING_CORRELATION_MISMATCH")
+
+    def test_out_of_order_tracking_event_fails_closed(self):
+        event = {
+            "event_id": "track-stale",
+            "shopify_order_id": "SHOPIFY-ORDER-1",
+            "ebay_order_id": "EBAY-ORDER-1",
+            "tracking_number": "TRACK-OLD",
+            "tracking_sequence": 8,
+        }
+        result = tracking_update(event, latest_sequence=9)
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["reason"], "OUT_OF_ORDER_TRACKING_EVENT")
+        self.assertFalse(result["receipt"]["publication_authority"])
 
     def test_duplicate_event_fails_closed(self):
         event = {"event_id": "evt-1", "sku": "SKU-100"}
