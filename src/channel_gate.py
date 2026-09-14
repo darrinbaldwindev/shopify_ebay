@@ -7,6 +7,7 @@ DENIALS = {
     "MISSING_SHOPIFY_IDENTITY",
     "MISSING_SKU",
     "MARKETPLACE_PERMISSION_NOT_ELIGIBLE",
+    "CONFLICTING_MARKETPLACE_PERMISSION_EVIDENCE",
     "FREIGHT_UNKNOWN",
     "TRADE_COST_UNKNOWN",
     "CHANNEL_FEE_EVIDENCE_UNKNOWN",
@@ -14,7 +15,9 @@ DENIALS = {
     "PRICE_INVALID",
     "INVENTORY_CONTROL_UNKNOWN",
     "STALE_INVENTORY_EVIDENCE",
+    "CONFLICTING_INVENTORY_EVIDENCE",
     "STALE_SOURCE_IDENTITY",
+    "CONFLICTING_SOURCE_IDENTITY_EVIDENCE",
     "CHANNEL_ECONOMICS_NOT_POSITIVE",
 }
 
@@ -35,6 +38,8 @@ def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
 
     This is a candidate-mapping gate only. Synthetic success never grants
     publication, account mutation, spend, or production authority.
+    Conflicting evidence always fails closed; callers cannot select the
+    favourable side of a disagreement to manufacture eligibility.
     """
     product_id = candidate.get("shopify_product_id")
     variant_id = candidate.get("shopify_variant_id")
@@ -45,9 +50,13 @@ def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
     if not _present(sku):
         return GateResult(False, "MISSING_SKU", None)
 
+    if candidate.get("source_identity_conflict") is True:
+        return GateResult(False, "CONFLICTING_SOURCE_IDENTITY_EVIDENCE", str(sku))
     if candidate.get("source_identity_current") is not True:
         return GateResult(False, "STALE_SOURCE_IDENTITY", str(sku))
 
+    if candidate.get("marketplace_permission_conflict") is True:
+        return GateResult(False, "CONFLICTING_MARKETPLACE_PERMISSION_EVIDENCE", str(sku))
     if candidate.get("marketplace_permission") != "EBAY-ELIGIBLE":
         return GateResult(False, "MARKETPLACE_PERMISSION_NOT_ELIGIBLE", str(sku))
 
@@ -65,6 +74,8 @@ def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
     if candidate.get("fulfilment_seller_identity_known") is not True:
         return GateResult(False, "FULFILMENT_IDENTITY_UNKNOWN", str(sku))
 
+    if candidate.get("inventory_evidence_conflict") is True:
+        return GateResult(False, "CONFLICTING_INVENTORY_EVIDENCE", str(sku))
     if candidate.get("inventory_control_evidence") is not True:
         return GateResult(False, "INVENTORY_CONTROL_UNKNOWN", str(sku))
     if candidate.get("inventory_evidence_fresh") is not True:
