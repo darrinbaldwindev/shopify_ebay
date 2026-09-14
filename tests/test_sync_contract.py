@@ -14,7 +14,9 @@ class SyncContractTests(unittest.TestCase):
         self.assertTrue(result["accepted"])
         self.assertEqual(result["candidate"]["source"], "SHOPIFY")
         self.assertFalse(result["receipt"]["publication_authority"])
+        self.assertFalse(result["receipt"]["production_mutation"])
         self.assertFalse(result["receipt"]["network_io"])
+        self.assertEqual(result["receipt"]["canonical_commercial_authority"], "SHOPIFY")
 
     def test_stale_inventory_event_fails_closed(self):
         event = {
@@ -87,14 +89,30 @@ class SyncContractTests(unittest.TestCase):
         self.assertEqual(result["reason"], "OUT_OF_ORDER_TRACKING_EVENT")
         self.assertFalse(result["receipt"]["publication_authority"])
 
-    def test_duplicate_event_fails_closed(self):
+    def test_duplicate_event_fails_closed_with_stable_receipt(self):
         event = {"event_id": "evt-1", "sku": "SKU-100"}
         first = accept_once(event, frozenset())
-        duplicate = accept_once(event, frozenset({"evt-1"}))
+        duplicate = accept_once(event, frozenset({"evt-1"}), {"evt-1": first["receipt"]["input_hash"]})
         self.assertTrue(first["accepted"])
         self.assertFalse(duplicate["accepted"])
         self.assertEqual(duplicate["reason"], "DUPLICATE_EVENT")
         self.assertEqual(first["receipt"]["input_hash"], duplicate["receipt"]["input_hash"])
+
+    def test_reused_event_id_with_changed_payload_fails_as_conflict(self):
+        original = {"event_id": "evt-conflict", "sku": "SKU-100", "quantity": 1}
+        first = accept_once(original, frozenset())
+        changed = {"event_id": "evt-conflict", "sku": "SKU-100", "quantity": 2}
+        replay = accept_once(
+            changed,
+            frozenset({"evt-conflict"}),
+            {"evt-conflict": first["receipt"]["input_hash"]},
+        )
+        self.assertFalse(replay["accepted"])
+        self.assertEqual(replay["reason"], "EVENT_ID_PAYLOAD_CONFLICT")
+        self.assertNotEqual(first["receipt"]["input_hash"], replay["receipt"]["input_hash"])
+        self.assertFalse(replay["receipt"]["publication_authority"])
+        self.assertFalse(replay["receipt"]["production_mutation"])
+        self.assertFalse(replay["receipt"]["network_io"])
 
 
 if __name__ == "__main__":
