@@ -105,6 +105,11 @@ def accept_once(
     receipt = _receipt("dedupe", event)
     if not isinstance(event_id, str) or not event_id.strip():
         return {"accepted": False, "reason": "MISSING_EVENT_ID", "receipt": receipt}
+    # Event IDs are durable replay/correlation keys. Reject non-canonical
+    # whitespace instead of normalizing it silently: normalization would make
+    # the identity key disagree with the exact payload covered by input_hash.
+    if event_id != event_id.strip():
+        return {"accepted": False, "reason": "NON_CANONICAL_EVENT_ID", "receipt": receipt}
     if event_id in seen_event_ids:
         if seen_input_hashes is not None:
             prior_hash = seen_input_hashes.get(event_id)
