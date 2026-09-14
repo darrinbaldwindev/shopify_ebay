@@ -114,6 +114,15 @@ class SyncContractTests(unittest.TestCase):
         self.assertFalse(replay["receipt"]["production_mutation"])
         self.assertFalse(replay["receipt"]["network_io"])
 
+    def test_event_id_whitespace_cannot_bypass_replay_identity(self):
+        event = {"event_id": " evt-1 ", "sku": "SKU-100"}
+        result = accept_once(event, frozenset({"evt-1"}))
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["reason"], "NON_CANONICAL_EVENT_ID")
+        self.assertFalse(result["receipt"]["publication_authority"])
+        self.assertFalse(result["receipt"]["production_mutation"])
+        self.assertFalse(result["receipt"]["network_io"])
+
 
 if __name__ == "__main__":
     unittest.main()
