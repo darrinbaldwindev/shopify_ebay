@@ -4,17 +4,23 @@ import hashlib
 import json
 from typing import Any, Mapping
 
-SYNC_VERSION = "v0.2"
+SYNC_VERSION = "v0.3"
+
+
+def _input_hash(payload: Mapping[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _receipt(kind: str, payload: Mapping[str, Any]) -> dict[str, Any]:
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return {
         "kind": kind,
-        "input_hash": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "input_hash": _input_hash(payload),
         "sync_version": SYNC_VERSION,
         "publication_authority": False,
+        "production_mutation": False,
         "network_io": False,
+        "canonical_commercial_authority": "SHOPIFY",
     }
 
 
@@ -90,10 +96,19 @@ def tracking_update(
     }
 
 
-def accept_once(event: Mapping[str, Any], seen_event_ids: frozenset[str]) -> dict[str, Any]:
+def accept_once(
+    event: Mapping[str, Any],
+    seen_event_ids: frozenset[str],
+    seen_input_hashes: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     event_id = event.get("event_id")
+    receipt = _receipt("dedupe", event)
     if not isinstance(event_id, str) or not event_id.strip():
-        return {"accepted": False, "reason": "MISSING_EVENT_ID", "receipt": _receipt("dedupe", event)}
+        return {"accepted": False, "reason": "MISSING_EVENT_ID", "receipt": receipt}
     if event_id in seen_event_ids:
-        return {"accepted": False, "reason": "DUPLICATE_EVENT", "receipt": _receipt("dedupe", event)}
-    return {"accepted": True, "event_id": event_id, "receipt": _receipt("dedupe", event)}
+        if seen_input_hashes is not None:
+            prior_hash = seen_input_hashes.get(event_id)
+            if prior_hash is not None and prior_hash != receipt["input_hash"]:
+                return {"accepted": False, "reason": "EVENT_ID_PAYLOAD_CONFLICT", "receipt": receipt}
+        return {"accepted": False, "reason": "DUPLICATE_EVENT", "receipt": receipt}
+    return {"accepted": True, "event_id": event_id, "receipt": receipt}
