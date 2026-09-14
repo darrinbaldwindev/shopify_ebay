@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any, Mapping
 
-SYNC_VERSION = "v0.1"
+SYNC_VERSION = "v0.2"
 
 
 def _receipt(kind: str, payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -18,13 +18,17 @@ def _receipt(kind: str, payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def inventory_change(event: Mapping[str, Any]) -> dict[str, Any]:
+def inventory_change(event: Mapping[str, Any], latest_revision: int | None = None) -> dict[str, Any]:
     required = ("event_id", "shopify_variant_id", "sku", "inventory_quantity")
     if any(event.get(key) in (None, "") for key in required):
         return {"accepted": False, "reason": "MISSING_SHOPIFY_INVENTORY_IDENTITY", "receipt": _receipt("inventory", event)}
     qty = event.get("inventory_quantity")
     if not isinstance(qty, int) or isinstance(qty, bool) or qty < 0:
         return {"accepted": False, "reason": "INVALID_INVENTORY_QUANTITY", "receipt": _receipt("inventory", event)}
+    if latest_revision is not None:
+        revision = event.get("inventory_revision")
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision <= latest_revision:
+            return {"accepted": False, "reason": "STALE_INVENTORY_EVENT", "receipt": _receipt("inventory", event)}
     return {
         "accepted": True,
         "candidate": {
@@ -37,10 +41,12 @@ def inventory_change(event: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def order_handoff(event: Mapping[str, Any]) -> dict[str, Any]:
+def order_handoff(event: Mapping[str, Any], seen_ebay_order_ids: frozenset[str] = frozenset()) -> dict[str, Any]:
     required = ("event_id", "ebay_order_id", "sku", "quantity")
     if any(event.get(key) in (None, "") for key in required):
         return {"accepted": False, "reason": "MISSING_EBAY_ORDER_IDENTITY", "receipt": _receipt("order", event)}
+    if event["ebay_order_id"] in seen_ebay_order_ids:
+        return {"accepted": False, "reason": "DUPLICATE_ORDER_IMPORT", "receipt": _receipt("order", event)}
     qty = event.get("quantity")
     if not isinstance(qty, int) or isinstance(qty, bool) or qty <= 0:
         return {"accepted": False, "reason": "INVALID_ORDER_QUANTITY", "receipt": _receipt("order", event)}
@@ -57,10 +63,22 @@ def order_handoff(event: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def tracking_update(event: Mapping[str, Any]) -> dict[str, Any]:
+def tracking_update(
+    event: Mapping[str, Any],
+    expected_correlation: tuple[str, str] | None = None,
+    latest_sequence: int | None = None,
+) -> dict[str, Any]:
     required = ("event_id", "shopify_order_id", "ebay_order_id", "tracking_number")
     if any(event.get(key) in (None, "") for key in required):
         return {"accepted": False, "reason": "MISSING_TRACKING_CORRELATION", "receipt": _receipt("tracking", event)}
+    if expected_correlation is not None:
+        actual = (event["shopify_order_id"], event["ebay_order_id"])
+        if actual != expected_correlation:
+            return {"accepted": False, "reason": "TRACKING_CORRELATION_MISMATCH", "receipt": _receipt("tracking", event)}
+    if latest_sequence is not None:
+        sequence = event.get("tracking_sequence")
+        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence <= latest_sequence:
+            return {"accepted": False, "reason": "OUT_OF_ORDER_TRACKING_EVENT", "receipt": _receipt("tracking", event)}
     return {
         "accepted": True,
         "candidate": {
