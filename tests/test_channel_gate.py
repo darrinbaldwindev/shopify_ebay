@@ -45,6 +45,9 @@ class ChannelGateTests(unittest.TestCase):
     def test_unknown_permission_denied(self):
         self.assertEqual(self.result_for(marketplace_permission="UNKNOWN").reason, "MARKETPLACE_PERMISSION_NOT_ELIGIBLE")
 
+    def test_conflicting_permission_evidence_denied_even_if_positive_value_present(self):
+        self.assertEqual(self.result_for(marketplace_permission_conflict=True).reason, "CONFLICTING_MARKETPLACE_PERMISSION_EVIDENCE")
+
     def test_unknown_trade_cost_denied(self):
         self.assertEqual(self.result_for(supplier_trade_cost_known=False).reason, "TRADE_COST_UNKNOWN")
 
@@ -69,8 +72,14 @@ class ChannelGateTests(unittest.TestCase):
     def test_stale_inventory_evidence_denied(self):
         self.assertEqual(self.result_for(inventory_evidence_fresh=False).reason, "STALE_INVENTORY_EVIDENCE")
 
+    def test_conflicting_inventory_evidence_denied_even_if_current_flag_is_true(self):
+        self.assertEqual(self.result_for(inventory_evidence_conflict=True).reason, "CONFLICTING_INVENTORY_EVIDENCE")
+
     def test_stale_source_identity_denied(self):
         self.assertEqual(self.result_for(source_identity_current=False).reason, "STALE_SOURCE_IDENTITY")
+
+    def test_conflicting_source_identity_denied_even_if_current_flag_is_true(self):
+        self.assertEqual(self.result_for(source_identity_conflict=True).reason, "CONFLICTING_SOURCE_IDENTITY_EVIDENCE")
 
     def test_non_positive_channel_contribution_denied(self):
         self.assertEqual(self.result_for(channel_contribution_aud=0).reason, "CHANNEL_ECONOMICS_NOT_POSITIVE")
