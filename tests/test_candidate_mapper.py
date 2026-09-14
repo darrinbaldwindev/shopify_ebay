@@ -11,9 +11,13 @@ BASE = {
     "title": "Synthetic compact organiser",
     "source_identity_current": True,
     "marketplace_permission": "EBAY-ELIGIBLE",
+    "supplier_trade_cost_known": True,
     "freight_landed_cost_known": True,
+    "marketplace_plan_fee_known": True,
+    "category_fee_known": True,
     "fulfilment_seller_identity_known": True,
     "inventory_control_evidence": True,
+    "inventory_evidence_fresh": True,
     "price_aud": 49.95,
     "channel_contribution_aud": 8.25,
 }
@@ -41,6 +45,13 @@ class CandidateMapperTests(unittest.TestCase):
         self.assertIsNone(result["candidate"])
         self.assertFalse(result["receipt"]["gate"]["eligible"])
         self.assertEqual(result["receipt"]["gate"]["reason"], "MARKETPLACE_PERMISSION_NOT_ELIGIBLE")
+
+    def test_unknown_commercial_evidence_produces_no_candidate(self):
+        for field in ("supplier_trade_cost_known", "freight_landed_cost_known", "marketplace_plan_fee_known", "category_fee_known", "inventory_evidence_fresh"):
+            denied = copy.deepcopy(BASE)
+            denied[field] = False
+            with self.subTest(field=field):
+                self.assertIsNone(map_candidate(denied)["candidate"])
 
     def test_receipt_is_deterministic_for_equivalent_input_ordering(self):
         reversed_items = dict(reversed(list(BASE.items())))
