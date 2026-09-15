@@ -32,6 +32,18 @@ class ChannelGateTests(unittest.TestCase):
     def test_missing_variant_denied(self):
         self.assertEqual(self.result_for(shopify_variant_id=None).reason, "MISSING_SHOPIFY_IDENTITY")
 
+    def test_malformed_product_gid_denied(self):
+        self.assertEqual(self.result_for(shopify_product_id="gid://shopify/ProductVariant/100").reason, "MALFORMED_SHOPIFY_IDENTITY")
+
+    def test_malformed_variant_gid_denied(self):
+        self.assertEqual(self.result_for(shopify_variant_id="gid://shopify/Product/200").reason, "MALFORMED_SHOPIFY_IDENTITY")
+
+    def test_noncanonical_whitespace_gid_denied(self):
+        self.assertEqual(self.result_for(shopify_variant_id=" gid://shopify/ProductVariant/200 ").reason, "MALFORMED_SHOPIFY_IDENTITY")
+
+    def test_non_numeric_variant_gid_denied(self):
+        self.assertEqual(self.result_for(shopify_variant_id="gid://shopify/ProductVariant/SYNTH-200").reason, "MALFORMED_SHOPIFY_IDENTITY")
+
     def test_blank_sku_denied(self):
         self.assertEqual(self.result_for(sku=" ").reason, "MISSING_SKU")
 
