@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Mapping
 
 DENIALS = {
@@ -21,11 +22,20 @@ class GateResult:
 def _present(value: Any) -> bool:
     return value is not None and (not isinstance(value, str) or bool(value.strip()))
 
+def canonical_identifier(value: Any) -> bool:
+    return isinstance(value, str) and bool(value) and value == value.strip() and all(ord(c) >= 32 and ord(c) != 127 for c in value)
+
+def shopify_identifier(value: Any, kind: str) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"gid://shopify/" + kind + r"/[1-9][0-9]*", value) is not None
+
 def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
     """Pure V0 eBay mapping gate; no I/O/state mutation and no publication authority."""
     product_id, variant_id, sku = candidate.get("shopify_product_id"), candidate.get("shopify_variant_id"), candidate.get("sku")
     if not (_present(product_id) and _present(variant_id)): return GateResult(False, "MISSING_SHOPIFY_IDENTITY", sku if _present(sku) else None)
     if not _present(sku): return GateResult(False, "MISSING_SKU", None)
+    if not shopify_identifier(product_id, "Product") or not shopify_identifier(variant_id, "ProductVariant"):
+        return GateResult(False, "MALFORMED_SHOPIFY_IDENTITY", None)
+    if not canonical_identifier(sku): return GateResult(False, "MALFORMED_SKU", None)
     sku = str(sku)
     if candidate.get("source_identity_conflict") is True: return GateResult(False, "CONFLICTING_SOURCE_IDENTITY_EVIDENCE", sku)
     if candidate.get("source_identity_current") is not True: return GateResult(False, "STALE_SOURCE_IDENTITY", sku)
