@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from typing import Any, Mapping
+from src.channel_gate import canonical_identifier, shopify_identifier
 
 SYNC_VERSION = "v0.3"
 
@@ -28,6 +29,8 @@ def inventory_change(event: Mapping[str, Any], latest_revision: int | None = Non
     required = ("event_id", "shopify_variant_id", "sku", "inventory_quantity")
     if any(event.get(key) in (None, "") for key in required):
         return {"accepted": False, "reason": "MISSING_SHOPIFY_INVENTORY_IDENTITY", "receipt": _receipt("inventory", event)}
+    if not all(canonical_identifier(event.get(k)) for k in ("event_id", "sku")) or not shopify_identifier(event.get("shopify_variant_id"), "ProductVariant"):
+        return {"accepted": False, "reason": "MALFORMED_INVENTORY_IDENTITY", "receipt": _receipt("inventory", event)}
     qty = event.get("inventory_quantity")
     if not isinstance(qty, int) or isinstance(qty, bool) or qty < 0:
         return {"accepted": False, "reason": "INVALID_INVENTORY_QUANTITY", "receipt": _receipt("inventory", event)}
@@ -51,6 +54,8 @@ def order_handoff(event: Mapping[str, Any], seen_ebay_order_ids: frozenset[str] 
     required = ("event_id", "ebay_order_id", "sku", "quantity")
     if any(event.get(key) in (None, "") for key in required):
         return {"accepted": False, "reason": "MISSING_EBAY_ORDER_IDENTITY", "receipt": _receipt("order", event)}
+    if not all(canonical_identifier(event.get(k)) for k in ("event_id", "ebay_order_id", "sku")):
+        return {"accepted": False, "reason": "MALFORMED_ORDER_IDENTITY", "receipt": _receipt("order", event)}
     if event["ebay_order_id"] in seen_ebay_order_ids:
         return {"accepted": False, "reason": "DUPLICATE_ORDER_IMPORT", "receipt": _receipt("order", event)}
     qty = event.get("quantity")
@@ -77,6 +82,8 @@ def tracking_update(
     required = ("event_id", "shopify_order_id", "ebay_order_id", "tracking_number")
     if any(event.get(key) in (None, "") for key in required):
         return {"accepted": False, "reason": "MISSING_TRACKING_CORRELATION", "receipt": _receipt("tracking", event)}
+    if not all(canonical_identifier(event.get(k)) for k in required):
+        return {"accepted": False, "reason": "MALFORMED_TRACKING_IDENTITY", "receipt": _receipt("tracking", event)}
     if expected_correlation is not None:
         actual = (event["shopify_order_id"], event["ebay_order_id"])
         if actual != expected_correlation:
@@ -108,8 +115,12 @@ def accept_once(
     # Event IDs are durable replay/correlation keys. Reject non-canonical
     # whitespace instead of normalizing it silently: normalization would make
     # the identity key disagree with the exact payload covered by input_hash.
-    if event_id != event_id.strip():
+    if not canonical_identifier(event_id):
         return {"accepted": False, "reason": "NON_CANONICAL_EVENT_ID", "receipt": receipt}
+    if seen_input_hashes is not None and event_id in seen_input_hashes:
+        receipt["prior_input_hash"] = seen_input_hashes[event_id]
+        if event_id not in seen_event_ids:
+            return {"accepted": False, "reason": "INCONSISTENT_REPLAY_EVIDENCE", "receipt": receipt}
     if event_id in seen_event_ids:
         if seen_input_hashes is not None:
             prior_hash = seen_input_hashes.get(event_id)
