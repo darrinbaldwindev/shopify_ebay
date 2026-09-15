@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Mapping
 
 DENIALS = {
     "MISSING_SHOPIFY_IDENTITY",
+    "MALFORMED_SHOPIFY_IDENTITY",
     "MISSING_SKU",
     "MARKETPLACE_PERMISSION_NOT_ELIGIBLE",
     "FREIGHT_UNKNOWN",
@@ -14,6 +16,9 @@ DENIALS = {
     "STALE_SOURCE_IDENTITY",
     "CHANNEL_ECONOMICS_NOT_POSITIVE",
 }
+
+_PRODUCT_GID = re.compile(r"^gid://shopify/Product/[1-9][0-9]*$")
+_VARIANT_GID = re.compile(r"^gid://shopify/ProductVariant/[1-9][0-9]*$")
 
 
 @dataclass(frozen=True)
@@ -27,6 +32,10 @@ def _present(value: Any) -> bool:
     return value is not None and (not isinstance(value, str) or bool(value.strip()))
 
 
+def _canonical_gid(value: Any, pattern: re.Pattern[str]) -> bool:
+    return isinstance(value, str) and value == value.strip() and pattern.fullmatch(value) is not None
+
+
 def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
     """Pure V0 eBay eligibility gate. No I/O and no state mutation."""
     product_id = candidate.get("shopify_product_id")
@@ -35,6 +44,8 @@ def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
 
     if not (_present(product_id) and _present(variant_id)):
         return GateResult(False, "MISSING_SHOPIFY_IDENTITY", sku if _present(sku) else None)
+    if not (_canonical_gid(product_id, _PRODUCT_GID) and _canonical_gid(variant_id, _VARIANT_GID)):
+        return GateResult(False, "MALFORMED_SHOPIFY_IDENTITY", sku if _present(sku) else None)
     if not _present(sku):
         return GateResult(False, "MISSING_SKU", None)
 
