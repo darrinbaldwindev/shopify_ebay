@@ -36,6 +36,30 @@ class IdentityNegatives(unittest.TestCase):
                         self.assertFalse(result["accepted"])
                         self.assertFalse(result["receipt"]["network_io"])
 
+    def test_inventory_revision_types_fail_closed_without_comparison_errors(self):
+        event = {
+            "event_id": "inventory-1",
+            "shopify_variant_id": "gid://shopify/ProductVariant/1",
+            "sku": "SKU-1",
+            "inventory_quantity": 4,
+            "inventory_revision": 2,
+        }
+        for latest in (True, -1, 1.0, "1", [], {}):
+            with self.subTest(latest_revision=latest):
+                result = inventory_change(event, latest_revision=latest)
+                self.assertFalse(result["accepted"])
+                self.assertEqual(result["reason"], "INVALID_LATEST_INVENTORY_REVISION")
+                self.assertFalse(result["receipt"]["network_io"])
+        for revision in (None, True, -1, 2.0, "2", [], {}):
+            with self.subTest(inventory_revision=revision):
+                malformed = dict(event, inventory_revision=revision)
+                result = inventory_change(malformed, latest_revision=1)
+                self.assertFalse(result["accepted"])
+                self.assertEqual(result["reason"], "INVALID_INVENTORY_REVISION")
+                self.assertFalse(result["receipt"]["publication_authority"])
+        self.assertEqual(inventory_change(event, latest_revision=2)["reason"], "STALE_INVENTORY_EVENT")
+        self.assertTrue(inventory_change(event, latest_revision=1)["accepted"])
+
     def test_conflicting_replay_evidence_never_becomes_first_acceptance(self):
         event = {"event_id": "original", "quantity": 1}
         first = accept_once(event, frozenset())
