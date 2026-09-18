@@ -57,6 +57,13 @@ class IdentityNegatives(unittest.TestCase):
                 self.assertFalse(result["accepted"])
                 self.assertEqual(result["reason"], "INVALID_INVENTORY_REVISION")
                 self.assertFalse(result["receipt"]["publication_authority"])
+                no_baseline = inventory_change(malformed)
+                self.assertFalse(no_baseline["accepted"])
+                self.assertEqual(no_baseline["reason"], "INVALID_INVENTORY_REVISION")
+        missing_revision = dict(event)
+        missing_revision.pop("inventory_revision")
+        self.assertTrue(inventory_change(missing_revision)["accepted"])
+        self.assertEqual(inventory_change(missing_revision, latest_revision=1)["reason"], "INVALID_INVENTORY_REVISION")
         self.assertEqual(inventory_change(event, latest_revision=2)["reason"], "STALE_INVENTORY_EVENT")
         self.assertTrue(inventory_change(event, latest_revision=1)["accepted"])
 
