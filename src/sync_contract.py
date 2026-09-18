@@ -34,14 +34,16 @@ def inventory_change(event: Mapping[str, Any], latest_revision: int | None = Non
     qty = event.get("inventory_quantity")
     if not isinstance(qty, int) or isinstance(qty, bool) or qty < 0:
         return {"accepted": False, "reason": "INVALID_INVENTORY_QUANTITY", "receipt": _receipt("inventory", event)}
-    if latest_revision is not None:
-        if not isinstance(latest_revision, int) or isinstance(latest_revision, bool) or latest_revision < 0:
-            return {"accepted": False, "reason": "INVALID_LATEST_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
+    if latest_revision is not None and (not isinstance(latest_revision, int) or isinstance(latest_revision, bool) or latest_revision < 0):
+        return {"accepted": False, "reason": "INVALID_LATEST_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
+    if "inventory_revision" in event:
         revision = event.get("inventory_revision")
         if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
             return {"accepted": False, "reason": "INVALID_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
-        if revision <= latest_revision:
+        if latest_revision is not None and revision <= latest_revision:
             return {"accepted": False, "reason": "STALE_INVENTORY_EVENT", "receipt": _receipt("inventory", event)}
+    elif latest_revision is not None:
+        return {"accepted": False, "reason": "INVALID_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
     return {
         "accepted": True,
         "candidate": {
