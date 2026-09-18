@@ -35,8 +35,12 @@ def inventory_change(event: Mapping[str, Any], latest_revision: int | None = Non
     if not isinstance(qty, int) or isinstance(qty, bool) or qty < 0:
         return {"accepted": False, "reason": "INVALID_INVENTORY_QUANTITY", "receipt": _receipt("inventory", event)}
     if latest_revision is not None:
+        if not isinstance(latest_revision, int) or isinstance(latest_revision, bool) or latest_revision < 0:
+            return {"accepted": False, "reason": "INVALID_LATEST_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
         revision = event.get("inventory_revision")
-        if not isinstance(revision, int) or isinstance(revision, bool) or revision <= latest_revision:
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
+            return {"accepted": False, "reason": "INVALID_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
+        if revision <= latest_revision:
             return {"accepted": False, "reason": "STALE_INVENTORY_EVENT", "receipt": _receipt("inventory", event)}
     return {
         "accepted": True,
@@ -112,9 +116,6 @@ def accept_once(
     receipt = _receipt("dedupe", event)
     if not isinstance(event_id, str) or not event_id.strip():
         return {"accepted": False, "reason": "MISSING_EVENT_ID", "receipt": receipt}
-    # Event IDs are durable replay/correlation keys. Reject non-canonical
-    # whitespace instead of normalizing it silently: normalization would make
-    # the identity key disagree with the exact payload covered by input_hash.
     if not canonical_identifier(event_id):
         return {"accepted": False, "reason": "NON_CANONICAL_EVENT_ID", "receipt": receipt}
     if seen_input_hashes is not None and event_id in seen_input_hashes:
