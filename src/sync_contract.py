@@ -34,10 +34,16 @@ def inventory_change(event: Mapping[str, Any], latest_revision: int | None = Non
     qty = event.get("inventory_quantity")
     if not isinstance(qty, int) or isinstance(qty, bool) or qty < 0:
         return {"accepted": False, "reason": "INVALID_INVENTORY_QUANTITY", "receipt": _receipt("inventory", event)}
-    if latest_revision is not None:
+    if latest_revision is not None and (not isinstance(latest_revision, int) or isinstance(latest_revision, bool) or latest_revision < 0):
+        return {"accepted": False, "reason": "INVALID_LATEST_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
+    if "inventory_revision" in event:
         revision = event.get("inventory_revision")
-        if not isinstance(revision, int) or isinstance(revision, bool) or revision <= latest_revision:
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
+            return {"accepted": False, "reason": "INVALID_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
+        if latest_revision is not None and revision <= latest_revision:
             return {"accepted": False, "reason": "STALE_INVENTORY_EVENT", "receipt": _receipt("inventory", event)}
+    elif latest_revision is not None:
+        return {"accepted": False, "reason": "INVALID_INVENTORY_REVISION", "receipt": _receipt("inventory", event)}
     return {
         "accepted": True,
         "candidate": {
@@ -88,10 +94,16 @@ def tracking_update(
         actual = (event["shopify_order_id"], event["ebay_order_id"])
         if actual != expected_correlation:
             return {"accepted": False, "reason": "TRACKING_CORRELATION_MISMATCH", "receipt": _receipt("tracking", event)}
-    if latest_sequence is not None:
+    if latest_sequence is not None and (not isinstance(latest_sequence, int) or isinstance(latest_sequence, bool) or latest_sequence < 0):
+        return {"accepted": False, "reason": "INVALID_LATEST_TRACKING_SEQUENCE", "receipt": _receipt("tracking", event)}
+    if "tracking_sequence" in event:
         sequence = event.get("tracking_sequence")
-        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence <= latest_sequence:
+        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
+            return {"accepted": False, "reason": "INVALID_TRACKING_SEQUENCE", "receipt": _receipt("tracking", event)}
+        if latest_sequence is not None and sequence <= latest_sequence:
             return {"accepted": False, "reason": "OUT_OF_ORDER_TRACKING_EVENT", "receipt": _receipt("tracking", event)}
+    elif latest_sequence is not None:
+        return {"accepted": False, "reason": "INVALID_TRACKING_SEQUENCE", "receipt": _receipt("tracking", event)}
     return {
         "accepted": True,
         "candidate": {
@@ -112,9 +124,6 @@ def accept_once(
     receipt = _receipt("dedupe", event)
     if not isinstance(event_id, str) or not event_id.strip():
         return {"accepted": False, "reason": "MISSING_EVENT_ID", "receipt": receipt}
-    # Event IDs are durable replay/correlation keys. Reject non-canonical
-    # whitespace instead of normalizing it silently: normalization would make
-    # the identity key disagree with the exact payload covered by input_hash.
     if not canonical_identifier(event_id):
         return {"accepted": False, "reason": "NON_CANONICAL_EVENT_ID", "receipt": receipt}
     if seen_input_hashes is not None and event_id in seen_input_hashes:

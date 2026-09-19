@@ -36,6 +36,68 @@ class IdentityNegatives(unittest.TestCase):
                         self.assertFalse(result["accepted"])
                         self.assertFalse(result["receipt"]["network_io"])
 
+    def test_inventory_revision_types_fail_closed_without_comparison_errors(self):
+        event = {
+            "event_id": "inventory-1",
+            "shopify_variant_id": "gid://shopify/ProductVariant/1",
+            "sku": "SKU-1",
+            "inventory_quantity": 4,
+            "inventory_revision": 2,
+        }
+        for latest in (True, -1, 1.0, "1", [], {}):
+            with self.subTest(latest_revision=latest):
+                result = inventory_change(event, latest_revision=latest)
+                self.assertFalse(result["accepted"])
+                self.assertEqual(result["reason"], "INVALID_LATEST_INVENTORY_REVISION")
+                self.assertFalse(result["receipt"]["network_io"])
+        for revision in (None, True, -1, 2.0, "2", [], {}):
+            with self.subTest(inventory_revision=revision):
+                malformed = dict(event, inventory_revision=revision)
+                result = inventory_change(malformed, latest_revision=1)
+                self.assertFalse(result["accepted"])
+                self.assertEqual(result["reason"], "INVALID_INVENTORY_REVISION")
+                self.assertFalse(result["receipt"]["publication_authority"])
+                no_baseline = inventory_change(malformed)
+                self.assertFalse(no_baseline["accepted"])
+                self.assertEqual(no_baseline["reason"], "INVALID_INVENTORY_REVISION")
+        missing_revision = dict(event)
+        missing_revision.pop("inventory_revision")
+        self.assertTrue(inventory_change(missing_revision)["accepted"])
+        self.assertEqual(inventory_change(missing_revision, latest_revision=1)["reason"], "INVALID_INVENTORY_REVISION")
+        self.assertEqual(inventory_change(event, latest_revision=2)["reason"], "STALE_INVENTORY_EVENT")
+        self.assertTrue(inventory_change(event, latest_revision=1)["accepted"])
+
+    def test_tracking_sequence_types_fail_closed_without_comparison_errors(self):
+        event = {
+            "event_id": "tracking-1",
+            "shopify_order_id": "SHOP-1",
+            "ebay_order_id": "EBAY-1",
+            "tracking_number": "TRACK-1",
+            "tracking_sequence": 2,
+        }
+        for latest in (True, -1, 1.0, "1", [], {}):
+            with self.subTest(latest_sequence=latest):
+                result = tracking_update(event, latest_sequence=latest)
+                self.assertFalse(result["accepted"])
+                self.assertEqual(result["reason"], "INVALID_LATEST_TRACKING_SEQUENCE")
+                self.assertFalse(result["receipt"]["network_io"])
+        for sequence in (None, True, -1, 2.0, "2", [], {}):
+            with self.subTest(tracking_sequence=sequence):
+                malformed = dict(event, tracking_sequence=sequence)
+                result = tracking_update(malformed, latest_sequence=1)
+                self.assertFalse(result["accepted"])
+                self.assertEqual(result["reason"], "INVALID_TRACKING_SEQUENCE")
+                self.assertFalse(result["receipt"]["publication_authority"])
+                no_baseline = tracking_update(malformed)
+                self.assertFalse(no_baseline["accepted"])
+                self.assertEqual(no_baseline["reason"], "INVALID_TRACKING_SEQUENCE")
+        missing_sequence = dict(event)
+        missing_sequence.pop("tracking_sequence")
+        self.assertTrue(tracking_update(missing_sequence)["accepted"])
+        self.assertEqual(tracking_update(missing_sequence, latest_sequence=1)["reason"], "INVALID_TRACKING_SEQUENCE")
+        self.assertEqual(tracking_update(event, latest_sequence=2)["reason"], "OUT_OF_ORDER_TRACKING_EVENT")
+        self.assertTrue(tracking_update(event, latest_sequence=1)["accepted"])
+
     def test_conflicting_replay_evidence_never_becomes_first_acceptance(self):
         event = {"event_id": "original", "quantity": 1}
         first = accept_once(event, frozenset())
