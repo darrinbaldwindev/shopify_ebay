@@ -82,3 +82,17 @@ W-EBAY-01: implements strict Shopify Product/ProductVariant IDs, non-coerced SKU
 EBY-VB-04: BLOCKED_STABLE for restart durability; canonical upstream store/caller remains unidentified across the previous discovery and this inspection. No persistence added. EBY-VB-05 remains HOLD: commercial evidence inputs not supplied.
 
 Next: (1) exact candidate CI and independent Green review; (2) test malformed inventory revision/latest revision types; (3) bind product/variant association to an authenticated upstream caller when available; (4) identify canonical replay caller before restart tests. S2 bounded source/tests/docs only; SG-09/10/14/20 apply. Independent security disposition PENDING. No live listing/network, production, credential, merge, deployment or owner-device action.
+
+## Work-mode repeat checkpoint — 2026-09-19
+Fresh default main c68883f24fb3711fce567a35b1a80db74933b82a; active #3 465d54c824734dca00ba115615728040d361e463, exact Fixture validation 35415025055 SUCCESS. Earlier inventory-only/empty portfolio status is stale: this branch has mapper/sync implementation and tests.
+This cycle consumes owner #54 through shared Overseer #56 guidance (draft), without claiming portfolio-wide adoption.
+
+WORK_MODE_QUEUE (existing task IDs only):
+- W-EBAY-01 revision/tracking validation: DONE on #3; do not duplicate. Authenticated product/variant association still BLOCKED.
+- EBY-VB-02 finite economics: reproduced four false admissions (NaN/+infinity in price or contribution) at #3 source. Add finite float checks at existing gate, preserve valid integers/floats, no new policy/persistence.
+- EBY-VB-03: local full suite 51 tests PASS including six nonfinite subcases and four finite controls. Candidate exact-head CI/readback required before claiming CI PASS.
+- EBY-VB-04 restart durability: BLOCKED_STABLE; canonical upstream replay owner absent.
+- EBY-VB-05 real SKU: HOLD; required authenticated commercial bundle absent.
+
+Branch work/finite-economics-20260919 is stacked on #3 to avoid competing edits to its sync_contract lineage. Changed source/test only channel_gate.py and test_finite_economics.py; no connector/network/publication authority. S2; SG-09/10/14/20 retained. Independent Green/security pending, not self-certified.
+Next exact action: verify candidate CI; upstream canonical caller/evidence before any association or restart-durability widening. Remaining mapper-input shape/serialization behavior requires separate inventory before accepting more work.

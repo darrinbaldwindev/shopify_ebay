@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+import math
 from typing import Any, Mapping
 
 DENIALS = {
@@ -53,7 +54,7 @@ def evaluate_channel_gate(candidate: Mapping[str, Any]) -> GateResult:
     if candidate.get("inventory_control_evidence") is not True: return GateResult(False, "INVENTORY_CONTROL_UNKNOWN", sku)
     if candidate.get("inventory_evidence_fresh") is not True: return GateResult(False, "STALE_INVENTORY_EVIDENCE", sku)
     price = candidate.get("price_aud")
-    if not isinstance(price, (int, float)) or isinstance(price, bool) or price <= 0: return GateResult(False, "PRICE_INVALID", sku)
+    if not isinstance(price, (int, float)) or isinstance(price, bool) or (isinstance(price, float) and not math.isfinite(price)) or price <= 0: return GateResult(False, "PRICE_INVALID", sku)
     contribution = candidate.get("channel_contribution_aud")
-    if not isinstance(contribution, (int, float)) or isinstance(contribution, bool) or contribution <= 0: return GateResult(False, "CHANNEL_ECONOMICS_NOT_POSITIVE", sku)
+    if not isinstance(contribution, (int, float)) or isinstance(contribution, bool) or (isinstance(contribution, float) and not math.isfinite(contribution)) or contribution <= 0: return GateResult(False, "CHANNEL_ECONOMICS_NOT_POSITIVE", sku)
     return GateResult(True, "ELIGIBLE_FOR_MAPPING_ONLY", sku)
