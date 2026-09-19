@@ -94,10 +94,16 @@ def tracking_update(
         actual = (event["shopify_order_id"], event["ebay_order_id"])
         if actual != expected_correlation:
             return {"accepted": False, "reason": "TRACKING_CORRELATION_MISMATCH", "receipt": _receipt("tracking", event)}
-    if latest_sequence is not None:
+    if latest_sequence is not None and (not isinstance(latest_sequence, int) or isinstance(latest_sequence, bool) or latest_sequence < 0):
+        return {"accepted": False, "reason": "INVALID_LATEST_TRACKING_SEQUENCE", "receipt": _receipt("tracking", event)}
+    if "tracking_sequence" in event:
         sequence = event.get("tracking_sequence")
-        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence <= latest_sequence:
+        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
+            return {"accepted": False, "reason": "INVALID_TRACKING_SEQUENCE", "receipt": _receipt("tracking", event)}
+        if latest_sequence is not None and sequence <= latest_sequence:
             return {"accepted": False, "reason": "OUT_OF_ORDER_TRACKING_EVENT", "receipt": _receipt("tracking", event)}
+    elif latest_sequence is not None:
+        return {"accepted": False, "reason": "INVALID_TRACKING_SEQUENCE", "receipt": _receipt("tracking", event)}
     return {
         "accepted": True,
         "candidate": {
